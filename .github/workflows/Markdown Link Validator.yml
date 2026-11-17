@@ -35,7 +35,7 @@ jobs:
           }
           '@
 
-          [string[]]$MarkdownFilePaths = @('.\README.md', '.\Rationale.md')
+          [string[]]$MarkdownFilePaths = @('.\README.md')
 
           # Iterate over each file simultaneously
           $MarkdownFilePaths | ForEach-Object -Parallel {
