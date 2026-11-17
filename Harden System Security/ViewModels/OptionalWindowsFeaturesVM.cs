@@ -209,8 +209,9 @@ internal sealed partial class DismServiceClient : IDisposable
 				return ReadChunkedResultsList();
 			});
 		}
-		catch
+		catch (Exception ex)
 		{
+			Logger.Write(ex);
 			return [];
 		}
 	}
@@ -236,8 +237,9 @@ internal sealed partial class DismServiceClient : IDisposable
 				return ReadChunkedResultsList();
 			});
 		}
-		catch
+		catch (Exception ex)
 		{
+			Logger.Write(ex);
 			return [];
 		}
 	}
@@ -263,8 +265,9 @@ internal sealed partial class DismServiceClient : IDisposable
 				return ReadChunkedResultsList();
 			});
 		}
-		catch
+		catch (Exception ex)
 		{
+			Logger.Write(ex);
 			return [];
 		}
 	}
@@ -292,8 +295,9 @@ internal sealed partial class DismServiceClient : IDisposable
 
 			return await WaitForOperationComplete();
 		}
-		catch
+		catch (Exception ex)
 		{
+			Logger.Write(ex);
 			return false;
 		}
 	}
@@ -307,8 +311,9 @@ internal sealed partial class DismServiceClient : IDisposable
 
 			return await WaitForOperationComplete();
 		}
-		catch
+		catch (Exception ex)
 		{
+			Logger.Write(ex);
 			return false;
 		}
 	}
@@ -335,8 +340,9 @@ internal sealed partial class DismServiceClient : IDisposable
 
 			return await WaitForOperationComplete();
 		}
-		catch
+		catch (Exception ex)
 		{
+			Logger.Write(ex);
 			return false;
 		}
 	}
@@ -350,8 +356,9 @@ internal sealed partial class DismServiceClient : IDisposable
 
 			return await WaitForOperationComplete();
 		}
-		catch
+		catch (Exception ex)
 		{
+			Logger.Write(ex);
 			return false;
 		}
 	}
