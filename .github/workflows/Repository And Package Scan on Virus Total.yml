@@ -133,16 +133,32 @@ jobs:
               $AnalysisData = Invoke-VTFileUpload -filePath $FilePath -apiKey $ApiKey
 
               # Fetch the report from VirusTotal
+              # VirusTotal reports an analysis as 'queued', 'in-progress' or 'completed'.
+              # Wait between every attempt and bound the number of attempts so an
+              # unexpected or long-running status cannot make this loop poll forever.
+              [System.Int32]$MaxAttempts = 60 # 60 attempts x 30 seconds = 30 minutes
+              [System.Int32]$Attempt = 0
+
               do {
                   $Response = Invoke-WebRequest -Uri $AnalysisData.URL -Method Get -Headers $Headers
                   $JsonResponse = $Response.Content | ConvertFrom-Json
+                  [System.String]$Status = $JsonResponse.data.attributes.status
 
-                  if ($JsonResponse.data.attributes.status -eq 'queued') {
-                      Write-Host "Status: $($JsonResponse.data.attributes.status). Waiting 30 more seconds..." -ForegroundColor Blue
+                  if ($Status -eq 'queued' -or $Status -eq 'in-progress') {
+                      $Attempt++
+                      if ($Attempt -gt $MaxAttempts) {
+                          Write-Host "VirusTotal analysis did not complete after $MaxAttempts attempts. Last status: $Status" -ForegroundColor Red
+                          exit 1
+                      }
+                      Write-Host "Status: $Status. Waiting 30 more seconds... (attempt $Attempt/$MaxAttempts)" -ForegroundColor Blue
                       Start-Sleep -Seconds 30
                   }
+                  elseif ($Status -ne 'completed') {
+                      Write-Host "VirusTotal analysis returned an unexpected status '$Status'. Stopping the poll." -ForegroundColor Red
+                      exit 1
+                  }
               }
-              until ($JsonResponse.data.attributes.status -eq 'completed')
+              until ($Status -eq 'completed')
 
               Write-Host "Status is now: $($JsonResponse.data.attributes.status)" -ForegroundColor Blue
 
