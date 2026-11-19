@@ -925,8 +925,7 @@ jobs:
 
           "@
 
-          # Create the pull request
-          gh pr create --title $CommitMessageAndPRTitle --body $PRBody --base main --label 'Automated 🤖' --assignee HotCakeX
+          gh pr create --title $CommitMessageAndPRTitle --body $PRBody --base main --assignee ${{ github.repository_owner }}
 
       - name: Add Body Text to the Draft Release
         shell: pwsh
