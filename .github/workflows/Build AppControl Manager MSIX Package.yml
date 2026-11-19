@@ -900,7 +900,7 @@ jobs:
           git config --global user.name 'HotCakeX'
 
           # Create a new branch for the pull request, making sure branch name has valid characters
-          [string]$NewBranchName = 'AppControl-Manager-DownloadLink-Version-Update'
+          [string]$NewBranchName = "AppControl-Manager-DownloadLink-Version-Update-$PACKAGE_VERSION-${{ github.run_id }}-${{ github.run_attempt }}"
           git checkout -b $NewBranchName
 
           [string]$CommitMessageAndPRTitle = "AppControl-Manager-DownloadLink-Version-Update-Version-$PACKAGE_VERSION"
