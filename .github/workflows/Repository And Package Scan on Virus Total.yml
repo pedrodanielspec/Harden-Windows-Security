@@ -36,10 +36,17 @@ jobs:
           $null = New-Item -Path './release_assets' -ItemType Directory  # Create folder for release assets
 
           # Get latest release information from GitHub API
-          $release = Invoke-RestMethod -Uri "https://api.github.com/repos/${{ github.repository }}/releases/latest" -Headers @{Authorization = "token $env:GITHUB_TOKEN"} -UseBasicParsing
+          $release = $null
+          try {
+            $release = Invoke-RestMethod -Uri "https://api.github.com/repos/${{ github.repository }}/releases/latest" -Headers @{Authorization = "token $env:GITHUB_TOKEN"} -UseBasicParsing
+          } catch {
+            if ([int]$_.Exception.Response.StatusCode -ne 404) {
+              throw
+            }
+          }
 
           # Download assets if they exist
-          if ($release.assets.Count -gt 0) {
+          if ($null -ne $release -and $release.assets.Count -gt 0) {
             foreach ($asset in $release.assets) {
               $assetUrl = $asset.browser_download_url
               $assetName = $asset.name
