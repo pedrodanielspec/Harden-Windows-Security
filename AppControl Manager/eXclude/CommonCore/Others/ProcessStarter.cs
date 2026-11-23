@@ -50,11 +50,18 @@ internal static class ProcessStarter
 		process.StartInfo = processInfo;
 		_ = process.Start();
 
-		// Capture output and errors
-		string output = process.StandardOutput.ReadToEnd();
-		string error = process.StandardError.ReadToEnd();
+		// Drain both redirected streams at the same time. Reading one stream to its end before the other
+		// lets a child that fills the unread stream's pipe buffer block in its write, and then neither side
+		// continues, so the caller waits forever.
+		Task<string> outputTask = Task.Run(() => process.StandardOutput.ReadToEnd());
+		Task<string> errorTask = Task.Run(() => process.StandardError.ReadToEnd());
+
+		Task.WaitAll(outputTask, errorTask);
 
 		process.WaitForExit();
+
+		string output = outputTask.Result;
+		string error = errorTask.Result;
 
 		if (process.ExitCode is not 0)
 		{
@@ -117,6 +124,10 @@ internal static class ProcessStarter
 			}
 		});
 
+		// The first line received from the Error stream, thrown as InvalidOperationException by the
+		// calling thread after both readers finish.
+		string? firstErrorLine = null;
+
 		// Task for Standard Error
 		Task stderrTask = Task.Run(() =>
 		{
@@ -128,65 +139,26 @@ internal static class ProcessStarter
 					break;
 				}
 
-				// On first error line, attempt to terminate the process (if still running) to obtain an exit code,
-				// then construct and store the exception to be thrown by the main thread.
-				int exitCode = -1;
-
-				try
+				// The first error line ends the command: kill the process tree so the call returns promptly.
+				// The line is kept for the calling thread to throw, because a throw inside this task reaches
+				// callers as an AggregateException wrapping the InvalidOperationException.
+				if (firstErrorLine is null)
 				{
-					if (!process.HasExited)
-					{
-						// Kill the process tree to ensure fast termination and access to ExitCode.
-						try
-						{
-							process.Kill(true);
-						}
-						catch
-						{
-							// Ignored - process might have exited naturally in the meantime.
-						}
-					}
+					firstErrorLine = line;
 
-					// Ensure we wait for the process to exit so ExitCode becomes available.
 					try
 					{
-						process.WaitForExit();
+						if (!process.HasExited)
+						{
+							// Kill the process tree to ensure fast termination.
+							process.Kill(true);
+						}
 					}
-					catch { }
-
-					if (process.HasExited)
+					catch
 					{
-						exitCode = process.ExitCode;
+						// Ignored - process might have exited naturally in the meantime.
 					}
 				}
-				catch
-				{
-					// If anything goes wrong determining exit code, we retain the default -1.
-				}
-
-#if DEBUG
-				throw new InvalidOperationException(
-					string.Format(
-						Atlas.GetStr("CommandFailedWithExitCodeErrorMessage"),
-						command,
-						arguments,
-						exitCode,
-						line
-					)
-				);
-#else
-				// In release builds, omit command and arguments from error message for security.
-				throw new InvalidOperationException(
-					string.Format(
-						Atlas.GetStr("CommandFailedWithExitCodeErrorMessage"),
-						string.Empty,
-						string.Empty,
-						exitCode,
-						line
-					)
-				);
-
-#endif
 			}
 		});
 
@@ -195,6 +167,32 @@ internal static class ProcessStarter
 
 		// Ensure process has exited
 		process.WaitForExit();
+
+		if (firstErrorLine is not null)
+		{
+#if DEBUG
+			throw new InvalidOperationException(
+				string.Format(
+					Atlas.GetStr("CommandFailedWithExitCodeErrorMessage"),
+					command,
+					arguments,
+					process.ExitCode,
+					firstErrorLine
+				)
+			);
+#else
+			// In release builds, omit command and arguments from error message for security.
+			throw new InvalidOperationException(
+				string.Format(
+					Atlas.GetStr("CommandFailedWithExitCodeErrorMessage"),
+					string.Empty,
+					string.Empty,
+					process.ExitCode,
+					firstErrorLine
+				)
+			);
+#endif
+		}
 
 		// throw if process exited with a non-zero exit code even if nothing was written to stderr.
 		if (process.ExitCode != 0)
