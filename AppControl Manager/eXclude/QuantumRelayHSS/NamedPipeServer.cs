@@ -431,54 +431,57 @@ internal sealed class NamedPipeServer : IDisposable
 	/// </summary>
 	private static async Task<(int ExitCode, string Output, string ErrorDetails)> ExecuteRunProcessAsync(string command, string? arguments, ClientSessionContext sessionContext)
 	{
-		return await Task.Run(() =>
+		try
 		{
-			try
+			sessionContext.SendLog("Processing command");
+
+			ProcessStartInfo processInfo = new()
 			{
-				sessionContext.SendLog("Processing command");
+				FileName = command,
+				RedirectStandardOutput = true,
+				RedirectStandardError = true,
+				UseShellExecute = false,
+				CreateNoWindow = true
+			};
 
-				ProcessStartInfo processInfo = new()
-				{
-					FileName = command,
-					RedirectStandardOutput = true,
-					RedirectStandardError = true,
-					UseShellExecute = false,
-					CreateNoWindow = true
-				};
+			if (arguments is not null)
+			{
+				processInfo.Arguments = arguments;
+			}
 
-				if (arguments is not null)
-				{
-					processInfo.Arguments = arguments;
-				}
+			using Process process = new();
+			process.StartInfo = processInfo;
 
-				using Process process = new();
-				process.StartInfo = processInfo;
+			if (!process.Start())
+			{
+				return (-1, string.Empty, $"Failed to start '{command}'");
+			}
 
-				if (!process.Start())
-				{
-					return (-1, string.Empty, $"Failed to start '{command}'");
-				}
+			sessionContext.SendLog($"{Atlas.QuantumRelayHSSServiceName} service RunProcess started with PID: {process.Id}");
 
-				sessionContext.SendLog($"{Atlas.QuantumRelayHSSServiceName} service RunProcess started with PID: {process.Id}");
+			// Drain both pipes concurrently. An anonymous pipe holds about 4 KB, so a child
+			// that writes more than that to stderr blocks in its write while this method
+			// still reads stdout, and then neither side continues.
+			Task<string> outputTask = process.StandardOutput.ReadToEndAsync();
+			Task<string> errorTask = process.StandardError.ReadToEndAsync();
 
-				// Capture output and errors
-				string output = process.StandardOutput.ReadToEnd();
-				string error = process.StandardError.ReadToEnd();
+			await Task.WhenAll(outputTask, errorTask).ConfigureAwait(false);
+			await process.WaitForExitAsync().ConfigureAwait(false);
 
-				process.WaitForExit();
+			string output = await outputTask.ConfigureAwait(false);
+			string error = await errorTask.ConfigureAwait(false);
 
-				if (process.ExitCode is not 0)
-				{
-					return (process.ExitCode, output, error);
-				}
-
+			if (process.ExitCode is not 0)
+			{
 				return (process.ExitCode, output, error);
 			}
-			catch (Exception ex)
-			{
-				return (-1, string.Empty, ex.ToString());
-			}
-		});
+
+			return (process.ExitCode, output, error);
+		}
+		catch (Exception ex)
+		{
+			return (-1, string.Empty, ex.ToString());
+		}
 	}
 
 	// Idle management helpers
