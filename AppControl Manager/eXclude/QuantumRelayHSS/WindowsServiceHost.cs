@@ -264,23 +264,6 @@ internal static class WindowsServiceHost
 		}
 		catch { }
 
-		// Close the Job Object handle last to force-terminate any remaining child processes
-		try
-		{
-			if (s_jobHandle != IntPtr.Zero)
-			{
-				bool closed = NativeMethods.CloseHandle(s_jobHandle);
-				s_jobHandle = IntPtr.Zero;
-
-				if (s_debugLoggingEnabled)
-				{
-					NativeEventLogger.WriteEntry(
-						$"{Atlas.QuantumRelayHSSServiceName} Job object closed (kill-on-close). CloseHandle result={closed}.",
-						NativeEventLogger.EventLogEntryType.Information);
-				}
-			}
-		}
-		catch { }
 	}
 
 	private static void ReportServiceStatus(SERVICE_STATE currentState, uint controlsAccepted = 0, uint win32ExitCode = 0, uint waitHintMs = 0)
@@ -343,6 +326,11 @@ internal static class WindowsServiceHost
 				// Keep the handle anyway; Assign may still work, but kill-on-close might not be set.
 			}
 
+			// This process joins the job so that every child it starts is a member as
+			// well, because job membership is inherited at creation, and so that all of
+			// them die with the service. The handle must therefore stay open for the
+			// whole life of the process: closing the last handle to a kill-on-close job
+			// terminates every process in the job, this one included.
 			IntPtr currentProcess = NativeMethods.GetCurrentProcess();
 			bool assignOk = NativeMethods.AssignProcessToJobObject(s_jobHandle, currentProcess);
 			if (!assignOk)
