@@ -336,6 +336,10 @@ internal static class Program
 					Methods.OperationExecutionState operationState = Methods.AddCapability(name, limitAccess, sourcePaths, cancelEvent.SafeWaitHandle.DangerousGetHandle());
 					SendOperationComplete(operationState);
 				}
+				catch (Exception ex)
+				{
+					SendError($"AddCapability error: {ex.Message}");
+				}
 				finally
 				{
 					EndOperation(cancelEvent);
@@ -366,6 +370,10 @@ internal static class Program
 				{
 					Methods.OperationExecutionState operationState = Methods.RemoveCapability(name, cancelEvent.SafeWaitHandle.DangerousGetHandle());
 					SendOperationComplete(operationState);
+				}
+				catch (Exception ex)
+				{
+					SendError($"RemoveCapability error: {ex.Message}");
 				}
 				finally
 				{
@@ -409,6 +417,10 @@ internal static class Program
 					Methods.OperationExecutionState operationState = Methods.EnableFeature(name, sourcePaths, cancelEvent.SafeWaitHandle.DangerousGetHandle());
 					SendOperationComplete(operationState);
 				}
+				catch (Exception ex)
+				{
+					SendError($"EnableFeature error: {ex.Message}");
+				}
 				finally
 				{
 					EndOperation(cancelEvent);
@@ -439,6 +451,10 @@ internal static class Program
 				{
 					Methods.OperationExecutionState operationState = Methods.DisableFeature(name, cancelEvent.SafeWaitHandle.DangerousGetHandle());
 					SendOperationComplete(operationState);
+				}
+				catch (Exception ex)
+				{
+					SendError($"DisableFeature error: {ex.Message}");
 				}
 				finally
 				{
