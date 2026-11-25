@@ -37,6 +37,9 @@ internal static class WindowsServiceHost
 	// Job object to ensure all child processes are killed when the service stops
 	private static IntPtr s_jobHandle = IntPtr.Zero;
 
+	private const int WorkerWaitSliceMs = 250;
+	private const int WorkerStopTimeoutMs = 15000;
+
 	// Debug logging toggle via System environment variable "QUANTUMRELAYHSS_DEBUG"
 	private static readonly bool s_debugLoggingEnabled = IsDebugEnabled();
 
@@ -167,10 +170,34 @@ internal static class WindowsServiceHost
 			ReportServiceStatus(SERVICE_STATE.SERVICE_RUNNING, controlsAccepted:
 				NativeMethods.SERVICE_ACCEPT_STOP | NativeMethods.SERVICE_ACCEPT_SHUTDOWN);
 
-			// Wait for worker to end; stop is requested by SCM or fatal error
+			// Wait for worker to end; stop is requested by SCM or fatal error. Only a stop ends
+			// the worker, so the wait has no bound until one arrives. After a stop it is
+			// bounded, so a session that still does not return cannot hold the stop past the
+			// wait hint reported to the SCM.
 			try
 			{
-				s_workerTask.Wait();
+				long stopWaitMs = 0;
+
+				while (!s_workerTask.Wait(WorkerWaitSliceMs))
+				{
+					if (!s_stopRequested)
+					{
+						continue;
+					}
+
+					stopWaitMs += WorkerWaitSliceMs;
+
+					if (stopWaitMs < WorkerStopTimeoutMs)
+					{
+						continue;
+					}
+
+					NativeEventLogger.WriteEntry(
+						$"{Atlas.QuantumRelayHSSServiceName} Worker did not end within {WorkerStopTimeoutMs} ms of the stop request. Continuing with the stop finalization.",
+						NativeEventLogger.EventLogEntryType.Warning);
+
+					break;
+				}
 			}
 			catch { } // If the task throws, proceed to stop reporting
 
@@ -234,6 +261,10 @@ internal static class WindowsServiceHost
 			s_stoppingCts?.Cancel();
 		}
 		catch { }
+
+		// A running client command keeps its pipe session, and the session keeps the worker
+		// alive. End the child here so the stop does not wait for the command to finish.
+		TerminateJobChildProcesses();
 	}
 
 	private static void TryStopServerSync()
@@ -281,6 +312,71 @@ internal static class WindowsServiceHost
 			}
 		}
 		catch { }
+	}
+
+	// Ends the child processes that the job object holds. The service process is a member of
+	// the same job, so each process is ended by its id and the service's own id is skipped.
+	private static void TerminateJobChildProcesses()
+	{
+		if (s_jobHandle == IntPtr.Zero)
+		{
+			return;
+		}
+
+		const int capacity = 64;
+		const int headerSize = sizeof(uint) * 2;
+		int bufferSize = headerSize + (capacity * IntPtr.Size);
+		IntPtr buffer = Marshal.AllocHGlobal(bufferSize);
+
+		try
+		{
+			Marshal.WriteInt32(buffer, 0, capacity);
+			Marshal.WriteInt32(buffer, sizeof(uint), 0);
+
+			if (!NativeMethods.QueryInformationJobObject(s_jobHandle, JOBOBJECTINFOCLASS.JobObjectBasicProcessIdList, buffer, (uint)bufferSize, out _))
+			{
+				return;
+			}
+
+			uint processCount = (uint)Marshal.ReadInt32(buffer, sizeof(uint));
+			int currentProcessId = Environment.ProcessId;
+
+			for (int i = 0; i < processCount; i++)
+			{
+				int processId = (int)Marshal.ReadIntPtr(buffer, headerSize + (i * IntPtr.Size));
+
+				if (processId <= 0 || processId == currentProcessId)
+				{
+					continue;
+				}
+
+				IntPtr processHandle = NativeMethods.OpenProcess(NativeMethods.PROCESS_TERMINATE | NativeMethods.PROCESS_QUERY_LIMITED_INFORMATION, false, (uint)processId);
+
+				if (processHandle == IntPtr.Zero)
+				{
+					continue;
+				}
+
+				try
+				{
+					// The pid can belong to another process by now, so the opened handle is the identity
+					// that is checked. A process outside the job is not a child of this service.
+					if (NativeMethods.IsProcessInJob(processHandle, s_jobHandle, out bool inJob) && inJob)
+					{
+						_ = NativeMethods.TerminateProcess(processHandle, 1);
+					}
+				}
+				finally
+				{
+					_ = NativeMethods.CloseHandle(processHandle);
+				}
+			}
+		}
+		catch { } // A failed termination must not hold the stop
+		finally
+		{
+			Marshal.FreeHGlobal(buffer);
+		}
 	}
 
 	private static void ReportServiceStatus(SERVICE_STATE currentState, uint controlsAccepted = 0, uint win32ExitCode = 0, uint waitHintMs = 0)

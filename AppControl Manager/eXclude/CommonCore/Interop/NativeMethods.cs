@@ -1748,6 +1748,45 @@ internal static unsafe partial class NativeMethods
 
 
 	/// <summary>
+	/// https://learn.microsoft.com/windows/win32/api/jobapi2/nf-jobapi2-queryinformationjobobject
+	/// </summary>
+	[LibraryImport("kernel32.dll", SetLastError = true)]
+	[DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+	[return: MarshalAs(UnmanagedType.Bool)]
+	internal static partial bool QueryInformationJobObject(
+		IntPtr hJob,
+		JOBOBJECTINFOCLASS JobObjectInformationClass,
+		IntPtr lpJobObjectInformation,
+		uint cbJobObjectInformationLength,
+		out uint lpReturnLength);
+
+
+	// https://learn.microsoft.com/windows/win32/procthread/process-security-and-access-rights
+	internal const uint PROCESS_TERMINATE = 0x0001;
+	internal const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
+
+
+	/// <summary>
+	/// https://learn.microsoft.com/windows/win32/api/jobapi2/nf-jobapi2-isprocessinjob
+	/// </summary>
+	[LibraryImport("kernel32.dll", SetLastError = true)]
+	[DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+	[return: MarshalAs(UnmanagedType.Bool)]
+	internal static partial bool IsProcessInJob(IntPtr ProcessHandle, IntPtr JobHandle, [MarshalAs(UnmanagedType.Bool)] out bool Result);
+
+
+	/// <summary>
+	/// https://learn.microsoft.com/windows/win32/api/processthreadsapi/nf-processthreadsapi-openprocess
+	/// </summary>
+	[LibraryImport("kernel32.dll", SetLastError = true)]
+	[DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
+	internal static partial IntPtr OpenProcess(
+		uint dwDesiredAccess,
+		[MarshalAs(UnmanagedType.Bool)] bool bInheritHandle,
+		uint dwProcessId);
+
+
+	/// <summary>
 	/// https://learn.microsoft.com/windows/win32/api/securitybaseapi/nf-securitybaseapi-checktokenmembership
 	/// </summary>
 	[LibraryImport("ADVAPI32")]
