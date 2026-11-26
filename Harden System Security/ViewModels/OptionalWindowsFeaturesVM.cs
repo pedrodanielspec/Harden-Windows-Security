@@ -195,78 +195,43 @@ internal sealed partial class DismServiceClient : IDisposable
 
 	internal async Task<List<DISMOutput>> GetAllResultsAsync()
 	{
-		try
+		return await Task.Run(async () =>
 		{
-			return await Task.Run(async () =>
-			{
-				_writer!.Write((byte)Command.GetAllResults);
-
-				Response response = await WaitForResponse();
-
-				if (response != Response.ResultsData)
-					return [];
-
-				return ReadChunkedResultsList();
-			});
-		}
-		catch
-		{
-			return [];
-		}
+			_writer!.Write((byte)Command.GetAllResults);
+			return await ReadResultsAsync();
+		});
 	}
 
 	internal async Task<List<DISMOutput>> GetSpecificCapabilitiesAsync(string[] capabilityNames)
 	{
-		try
+		return await Task.Run(async () =>
 		{
-			return await Task.Run(async () =>
+			_writer!.Write((byte)Command.GetSpecificCapabilities);
+			_writer.Write(capabilityNames.Length);
+
+			foreach (string name in capabilityNames)
 			{
-				_writer!.Write((byte)Command.GetSpecificCapabilities);
-				_writer.Write(capabilityNames.Length);
+				WriteString(name);
+			}
 
-				foreach (string name in capabilityNames)
-				{
-					WriteString(name);
-				}
-
-				Response response = await WaitForResponse();
-				if (response != Response.ResultsData)
-					return [];
-
-				return ReadChunkedResultsList();
-			});
-		}
-		catch
-		{
-			return [];
-		}
+			return await ReadResultsAsync();
+		});
 	}
 
 	internal async Task<List<DISMOutput>> GetSpecificFeaturesAsync(string[] featureNames)
 	{
-		try
+		return await Task.Run(async () =>
 		{
-			return await Task.Run(async () =>
+			_writer!.Write((byte)Command.GetSpecificFeatures);
+			_writer.Write(featureNames.Length);
+
+			foreach (string name in featureNames)
 			{
-				_writer!.Write((byte)Command.GetSpecificFeatures);
-				_writer.Write(featureNames.Length);
+				WriteString(name);
+			}
 
-				foreach (string name in featureNames)
-				{
-					WriteString(name);
-				}
-
-				Response response = await WaitForResponse();
-				if (response != Response.ResultsData)
-					return [];
-
-				return ReadChunkedResultsList();
-			});
-		}
-		catch
-		{
-			return [];
-		}
+			return await ReadResultsAsync();
+		});
 	}
 
 	internal async Task<bool> AddCapabilityAsync(string capabilityName, bool limitAccess = false, string[]? sourcePaths = null)
@@ -379,7 +344,7 @@ internal sealed partial class DismServiceClient : IDisposable
 		catch { }
 	}
 
-	private async Task<Response> WaitForResponse()
+	private async Task<(Response Response, string? ErrorMessage)> WaitForResponse()
 	{
 		await Task.Yield();
 
@@ -408,9 +373,10 @@ internal sealed partial class DismServiceClient : IDisposable
 			{
 				string errorMessage = ReadString();
 				LogReceived?.Invoke(string.Format(Atlas.GetStr("ServiceError"), errorMessage), LogTypeIntel.Error);
+				return (Response.Error, errorMessage);
 			}
 
-			return response;
+			return (response, null);
 		}
 	}
 
@@ -418,7 +384,7 @@ internal sealed partial class DismServiceClient : IDisposable
 	{
 		LastOperationWasCancelled = false;
 
-		Response response = await WaitForResponse();
+		(Response response, _) = await WaitForResponse();
 		if (response != Response.OperationComplete)
 			return false;
 
@@ -426,6 +392,16 @@ internal sealed partial class DismServiceClient : IDisposable
 		LastOperationWasCancelled = operationCompletionState == OperationCompletionState.Cancelled;
 
 		return operationCompletionState == OperationCompletionState.Succeeded;
+	}
+
+	private async Task<List<DISMOutput>> ReadResultsAsync()
+	{
+		(Response response, string? errorMessage) = await WaitForResponse();
+
+		if (response != Response.ResultsData)
+			throw new InvalidOperationException(string.Format(Atlas.GetStr("ServiceError"), errorMessage ?? response.ToString()));
+
+		return ReadChunkedResultsList();
 	}
 
 	private List<DISMOutput> ReadChunkedResultsList()
