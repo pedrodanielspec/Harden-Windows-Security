@@ -88,7 +88,7 @@ internal static partial class ISOManager
 				return disks;
 			}
 
-			queryPtr = Marshal.StringToBSTR("SELECT Number, FriendlyName, Size FROM MSFT_Disk");
+			queryPtr = Marshal.StringToBSTR("SELECT Number, FriendlyName, Size, BusType, IsSystem, IsBoot FROM MSFT_Disk");
 			queryLanguagePtr = Marshal.StringToBSTR("WQL");
 
 			// WBEM_FLAG_FORWARD_ONLY | WBEM_FLAG_RETURN_IMMEDIATELY (0x20 | 0x10)
@@ -185,6 +185,13 @@ internal static partial class ISOManager
 						Marshal.FreeBSTR(propName);
 					}
 
+					// Automatic partitioning clears and repartitions the whole disk, so only external
+					// media may be offered here. An internal disk would lose the data the user keeps on it.
+					if (GetDiskRowBool(diskObj, "IsSystem") || GetDiskRowBool(diskObj, "IsBoot") || !IsExternalDiskBusType(GetDiskRowUInt32(diskObj, "BusType")))
+					{
+						continue;
+					}
+
 					disks.Add(info);
 				}
 				finally
@@ -230,6 +237,20 @@ internal static partial class ISOManager
 		if (!string.Equals(Path.GetExtension(isoPath), ".iso", StringComparison.OrdinalIgnoreCase))
 		{
 			throw new InvalidOperationException("File is not an ISO.");
+		}
+
+		// Automatic partitioning erases the whole selected disk, so refuse anything that is not
+		// external media. This has to happen before the first write to the disk.
+		List<PhysicalDiskInfo> eligibleDisks = GetPhysicalDisksInfo();
+
+		if (eligibleDisks.Count == 0)
+		{
+			throw new InvalidOperationException("Could not read the physical disks from WMI, so the selected disk cannot be verified as external media. Close the app and try again.");
+		}
+
+		if (!eligibleDisks.Exists(disk => disk.Number == diskNumber))
+		{
+			throw new InvalidOperationException($"Disk {diskNumber} is not external removable media. This mode erases the whole selected disk, so it only accepts USB, SD or IEEE 1394 drives. Select a USB drive or use manual partition selection.");
 		}
 
 		Logger.Write($"Automatically partitioning Disk {diskNumber} using WMI");
@@ -997,6 +1018,58 @@ internal static partial class ISOManager
 		finally
 		{
 			_ = Interop.NativeMethods.CloseHandle(handle);
+		}
+	}
+
+	// Bus types that MSFT_Disk reports for external media. USB covers flash drives and USB
+	// enclosures, which Windows reports as fixed disks even though they hold removable media.
+	// MMC (13) stays out because a soldered eMMC module reports that bus type.
+	private const uint DiskBusTypeIEEE1394 = 4;
+	private const uint DiskBusTypeUSB = 7;
+	private const uint DiskBusTypeSD = 12;
+
+	private static bool IsExternalDiskBusType(uint busType) =>
+		busType is DiskBusTypeUSB or DiskBusTypeIEEE1394 or DiskBusTypeSD;
+
+	private static unsafe uint GetDiskRowUInt32(IWbemClassObject* diskObj, string propertyName)
+	{
+		IntPtr propName = Marshal.StringToBSTR(propertyName);
+		VARIANT val = default;
+		try
+		{
+			// A disk whose media properties cannot be read is treated as ineligible, never as an external disk.
+			if (diskObj->Get(propName, 0, out val, IntPtr.Zero, IntPtr.Zero) != 0)
+			{
+				return 0;
+			}
+
+			return val.uintVal;
+		}
+		finally
+		{
+			_ = NativeMethods.VariantClear(ref val);
+			Marshal.FreeBSTR(propName);
+		}
+	}
+
+	private static unsafe bool GetDiskRowBool(IWbemClassObject* diskObj, string propertyName)
+	{
+		IntPtr propName = Marshal.StringToBSTR(propertyName);
+		VARIANT val = default;
+		try
+		{
+			if (diskObj->Get(propName, 0, out val, IntPtr.Zero, IntPtr.Zero) != 0)
+			{
+				return false;
+			}
+
+			// VT_BOOL is 11, and VARIANT_TRUE is -1.
+			return val.vt == 11 && val.boolVal != 0;
+		}
+		finally
+		{
+			_ = NativeMethods.VariantClear(ref val);
+			Marshal.FreeBSTR(propName);
 		}
 	}
 
