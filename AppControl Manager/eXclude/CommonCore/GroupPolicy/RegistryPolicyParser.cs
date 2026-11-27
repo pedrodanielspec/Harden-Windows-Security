@@ -244,17 +244,60 @@ internal static class RegistryPolicyParser
 	/// <param name="policyFile"></param>
 	internal static void WriteFile(string filePath, RegistryPolicyFile policyFile)
 	{
+		// FileMode.Create on the live file truncates it before the first byte, and the retry
+		// rewrites this whole lambda, so the live file must keep its content until the new content is complete.
 		_ = ExecuteWithRetry(() =>
-	   {
-		   using FileStream fileStream = new(filePath, FileMode.Create, FileAccess.Write, FileShare.Read);
-		   WriteStream(fileStream, policyFile);
-		   return true;
-	   });
+		{
+			string directoryPath = Path.GetDirectoryName(filePath) is { Length: > 0 } parentDirectory
+				? parentDirectory
+				: Directory.GetCurrentDirectory();
+
+			string temporaryFilePath = Path.Combine(directoryPath, $"{Path.GetFileName(filePath)}.{Guid.NewGuid():N}.tmp");
+
+			try
+			{
+				using (FileStream temporaryStream = new(temporaryFilePath, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+				{
+					WriteStream(temporaryStream, policyFile);
+					temporaryStream.Flush(flushToDisk: true);
+				}
+
+				using (FileStream verificationStream = new(temporaryFilePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+				{
+					_ = ParseStream(verificationStream);
+				}
+
+				if (File.Exists(filePath))
+				{
+					File.Replace(temporaryFilePath, filePath, filePath + ".bak", ignoreMetadataErrors: false);
+				}
+				else
+				{
+					File.Move(temporaryFilePath, filePath);
+				}
+			}
+			finally
+			{
+				if (File.Exists(temporaryFilePath))
+				{
+					try
+					{
+						File.Delete(temporaryFilePath);
+					}
+					catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+					{
+						Logger.Write(ex);
+					}
+				}
+			}
+
+			return true;
+		});
 	}
 
 	private static void WriteStream(Stream stream, RegistryPolicyFile policyFile)
 	{
-		using BinaryWriter writer = new(stream);
+		using BinaryWriter writer = new(stream, System.Text.Encoding.UTF8, leaveOpen: true);
 
 		// Write header
 		writer.Write(RegistryPolicyFile.REGISTRY_FILE_SIGNATURE);
