@@ -1732,6 +1732,10 @@
   <data name="SuccessfullyAppliedSecurityMeasures" xml:space="preserve">
     <value>تم تطبيق {0} إجراء أمان بنجاح</value>
   </data>
+
+<data name="PartiallyAppliedSecurityMeasures" xml:space="preserve">
+    <value>تم تطبيق {0} إجراء أمان. تعذر تطبيق {1}.</value>
+  </data>
   <data name="SuccessfullyRemovedSecurityMeasures" xml:space="preserve">
     <value>تم إزالة {0} إجراء أمان بنجاح</value>
   </data>
