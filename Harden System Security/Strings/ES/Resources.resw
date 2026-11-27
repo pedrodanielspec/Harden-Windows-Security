@@ -1732,6 +1732,10 @@
 <data name="SuccessfullyAppliedSecurityMeasures" xml:space="preserve">
   <value>Se aplicaron exitosamente {0} medidas de seguridad</value>
 </data>
+
+<data name="PartiallyAppliedSecurityMeasures" xml:space="preserve">
+  <value>Se aplicaron {0} medidas de seguridad. No se pudieron aplicar {1}.</value>
+</data>
 <data name="SuccessfullyRemovedSecurityMeasures" xml:space="preserve">
   <value>Se removieron exitosamente {0} medidas de seguridad</value>
 </data>

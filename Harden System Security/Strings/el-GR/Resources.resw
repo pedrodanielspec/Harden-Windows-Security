@@ -1732,6 +1732,10 @@
 <data name="SuccessfullyAppliedSecurityMeasures" xml:space="preserve">
   <value>Εφαρμόστηκαν επιτυχώς {0} μέτρα ασφάλειας</value>
 </data>
+
+<data name="PartiallyAppliedSecurityMeasures" xml:space="preserve">
+  <value>Εφαρμόστηκαν {0} μέτρα ασφάλειας. Δεν κατέστη δυνατή η εφαρμογή {1}.</value>
+</data>
 <data name="SuccessfullyRemovedSecurityMeasures" xml:space="preserve">
   <value>Αφαιρέθηκαν επιτυχώς {0} μέτρα ασφάλειας</value>
 </data>

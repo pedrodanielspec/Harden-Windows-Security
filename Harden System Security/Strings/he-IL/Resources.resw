@@ -1732,6 +1732,10 @@
   <data name="SuccessfullyAppliedSecurityMeasures" xml:space="preserve">
     <value>הוחלו בהצלחה {0} אמצעי אבטחה</value>
   </data>
+
+<data name="PartiallyAppliedSecurityMeasures" xml:space="preserve">
+    <value>הוחלו {0} אמצעי אבטחה. לא ניתן היה להחיל {1}.</value>
+  </data>
   <data name="SuccessfullyRemovedSecurityMeasures" xml:space="preserve">
     <value>הוסרו בהצלחה {0} אמצעי אבטחה</value>
   </data>

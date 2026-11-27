@@ -1099,11 +1099,12 @@ internal sealed partial class MUnit(
 					// Process After dependencies
 					ProcessDependenciesPhase(mUnits, allAvailableMUnits, operation, ExecutionTiming.After, cancellationToken);
 
-					// Mark all as applied
-					foreach (MUnit mUnit in mUnits)
+					foreach (MUnit mUnit in CollectionsMarshal.AsSpan(mUnits))
 					{
-						mUnit.IsApplied = true;
+						mUnit.IsApplied = false;
 					}
+
+					SetMUnitsStateFromSystem(mUnits, allPolicies, isGroupPolicy, cancellationToken);
 					break;
 				}
 
@@ -1151,128 +1152,141 @@ internal sealed partial class MUnit(
 
 			case MUnitOperation.Verify:
 				{
-					if (isGroupPolicy)
-					{
-						// Primary verification: check via POL file for the selected Group Policy context.
-						// If any MUnit fails, fall back to direct registry verification (treat as Source = Registry).
-						GroupPolicyContext contextForVerification = GroupPolicyContext.Machine;
-
-						cancellationToken?.ThrowIfCancellationRequested();
-
-						// 1) Verify against the POL file for the chosen context
-						Dictionary<RegistryPolicyEntry, (bool IsCompliant, RegistryPolicyEntry? SystemEntry)> verificationResults =
-									RegistryPolicyParser.VerifyPoliciesInSystem(allPolicies, contextForVerification);
-
-						// 2) Per‑MUnit evaluation with fallback to direct Registry verification when needed
-						foreach (MUnit mUnit in CollectionsMarshal.AsSpan(mUnits))
-						{
-							cancellationToken?.ThrowIfCancellationRequested();
-
-							if (mUnit.VerifyStrategy is IVerifyGroupPolicy verifyStrategy)
-							{
-								// Check compliance of the policy
-								RegistryPolicyEntry policy = verifyStrategy.Policy;
-
-								if (verificationResults.TryGetValue(policy, out (bool IsCompliant, RegistryPolicyEntry? SystemEntry) resultTuple))
-								{
-									bool isConsideredCompliant = false;
-
-									if (policy.policyAction == PolicyAction.Apply)
-									{
-										// Must be present and matching
-										isConsideredCompliant = resultTuple.IsCompliant;
-									}
-									else if (policy.policyAction == PolicyAction.Remove)
-									{
-										// Must be absent (SystemEntry is null if not found)
-										isConsideredCompliant = resultTuple.SystemEntry == null;
-									}
-
-									if (isConsideredCompliant)
-									{
-										mUnit.IsApplied = true;
-										continue;
-									}
-								}
-
-								// 3) Fallback: verify via Registry (treat as Source = Registry)
-								// Clone as a Registry entry and set hive + RegValue (compute if missing)
-								RegistryPolicyEntry fallbackEntry = new(
-									source: Source.Registry,
-									keyName: policy.KeyName,
-									valueName: policy.ValueName,
-									type: policy.Type,
-									size: policy.Size,
-									data: policy.Data,
-									hive: policy.Hive,
-									id: policy.ID)
-								{
-									// Ensure we have the string form expected by Registry verification if it's missing
-									RegValue = policy.RegValue ?? CommonCore.RegistryManager.Manager.BuildRegValueFromParsedValue(policy)
-								};
-
-								Dictionary<RegistryPolicyEntry, bool> fallbackResults = CommonCore.RegistryManager.Manager.VerifyPoliciesInSystem([fallbackEntry]);
-
-#if DEBUG
-								// Log policies that failed POL verification but passed Registry fallback
-								bool registryCompliant = false;
-								if (fallbackResults.TryGetValue(fallbackEntry, out bool ok) && ok)
-								{
-									registryCompliant = true;
-								}
-
-								if (registryCompliant)
-								{
-									Logger.Write($"Verified via Registry fallback (GroupPolicy=>Registry): {policy.KeyName}\\{policy.ValueName} (Context: {contextForVerification})");
-								}
-#endif
-
-								if (fallbackResults.TryGetValue(fallbackEntry, out bool isFallbackCompliant) && isFallbackCompliant)
-								{
-									Logger.Write($"MUnit '{mUnit.Name}' verified via Registry fallback (Context: {contextForVerification}).");
-									mUnit.IsApplied = true;
-									continue;
-								}
-
-								// 4) Final fallback: specialized verification
-								bool specializedFallback = TryFallbackVerification(verifyStrategy.Policy, cancellationToken);
-								mUnit.IsApplied = specializedFallback;
-							}
-						}
-					}
-					else
-					{
-						cancellationToken?.ThrowIfCancellationRequested();
-
-						Dictionary<RegistryPolicyEntry, bool> verificationResults = CommonCore.RegistryManager.Manager.VerifyPoliciesInSystem(allPolicies);
-
-						// Update status based on verification results, with fallback support
-						foreach (MUnit mUnit in CollectionsMarshal.AsSpan(mUnits))
-						{
-							cancellationToken?.ThrowIfCancellationRequested();
-
-							if (mUnit.VerifyStrategy is IVerifyRegistry verifyStrategy)
-							{
-								RegistryPolicyEntry policy = verifyStrategy.Policy;
-
-								if (verificationResults.TryGetValue(policy, out bool isApplied) && isApplied)
-								{
-									mUnit.IsApplied = true;
-								}
-								else
-								{
-									// If primary verification is false, try fallback verification
-									bool fallbackResult = TryFallbackVerification(verifyStrategy.Policy, cancellationToken);
-									mUnit.IsApplied = fallbackResult;
-								}
-							}
-						}
-					}
+					SetMUnitsStateFromSystem(mUnits, allPolicies, isGroupPolicy, cancellationToken);
 					break;
 				}
 
 			default:
 				break;
+		}
+	}
+
+	/// <summary>
+	/// Sets the applied state of the given MUnits from the state that the system holds for their policies.
+	/// The bulk writers return no failure set, so a caller cannot tell a partial write from a full one.
+	/// </summary>
+	/// <param name="mUnits">The MUnits to set the state for</param>
+	/// <param name="allPolicies">The policies of those MUnits</param>
+	/// <param name="isGroupPolicy">True when the policies come from Group Policy, false when they come from the registry</param>
+	/// <param name="cancellationToken">Optional cancellation token</param>
+	private static void SetMUnitsStateFromSystem(List<MUnit> mUnits, List<RegistryPolicyEntry> allPolicies, bool isGroupPolicy, CancellationToken? cancellationToken = null)
+	{
+		if (isGroupPolicy)
+		{
+			// Primary verification: check via POL file for the selected Group Policy context.
+			// If any MUnit fails, fall back to direct registry verification (treat as Source = Registry).
+			GroupPolicyContext contextForVerification = GroupPolicyContext.Machine;
+
+			cancellationToken?.ThrowIfCancellationRequested();
+
+			// 1) Verify against the POL file for the chosen context
+			Dictionary<RegistryPolicyEntry, (bool IsCompliant, RegistryPolicyEntry? SystemEntry)> verificationResults =
+						RegistryPolicyParser.VerifyPoliciesInSystem(allPolicies, contextForVerification);
+
+			// 2) Per‑MUnit evaluation with fallback to direct Registry verification when needed
+			foreach (MUnit mUnit in CollectionsMarshal.AsSpan(mUnits))
+			{
+				cancellationToken?.ThrowIfCancellationRequested();
+
+				if (mUnit.VerifyStrategy is IVerifyGroupPolicy verifyStrategy)
+				{
+					// Check compliance of the policy
+					RegistryPolicyEntry policy = verifyStrategy.Policy;
+
+					if (verificationResults.TryGetValue(policy, out (bool IsCompliant, RegistryPolicyEntry? SystemEntry) resultTuple))
+					{
+						bool isConsideredCompliant = false;
+
+						if (policy.policyAction == PolicyAction.Apply)
+						{
+							// Must be present and matching
+							isConsideredCompliant = resultTuple.IsCompliant;
+						}
+						else if (policy.policyAction == PolicyAction.Remove)
+						{
+							// Must be absent (SystemEntry is null if not found)
+							isConsideredCompliant = resultTuple.SystemEntry == null;
+						}
+
+						if (isConsideredCompliant)
+						{
+							mUnit.IsApplied = true;
+							continue;
+						}
+					}
+
+					// 3) Fallback: verify via Registry (treat as Source = Registry)
+					// Clone as a Registry entry and set hive + RegValue (compute if missing)
+					RegistryPolicyEntry fallbackEntry = new(
+						source: Source.Registry,
+						keyName: policy.KeyName,
+						valueName: policy.ValueName,
+						type: policy.Type,
+						size: policy.Size,
+						data: policy.Data,
+						hive: policy.Hive,
+						id: policy.ID)
+					{
+						// Ensure we have the string form expected by Registry verification if it's missing
+						RegValue = policy.RegValue ?? CommonCore.RegistryManager.Manager.BuildRegValueFromParsedValue(policy)
+					};
+
+					Dictionary<RegistryPolicyEntry, bool> fallbackResults = CommonCore.RegistryManager.Manager.VerifyPoliciesInSystem([fallbackEntry]);
+
+#if DEBUG
+					// Log policies that failed POL verification but passed Registry fallback
+					bool registryCompliant = false;
+					if (fallbackResults.TryGetValue(fallbackEntry, out bool ok) && ok)
+					{
+						registryCompliant = true;
+					}
+
+					if (registryCompliant)
+					{
+						Logger.Write($"Verified via Registry fallback (GroupPolicy=>Registry): {policy.KeyName}\\{policy.ValueName} (Context: {contextForVerification})");
+					}
+#endif
+
+					if (fallbackResults.TryGetValue(fallbackEntry, out bool isFallbackCompliant) && isFallbackCompliant)
+					{
+						Logger.Write($"MUnit '{mUnit.Name}' verified via Registry fallback (Context: {contextForVerification}).");
+						mUnit.IsApplied = true;
+						continue;
+					}
+
+					// 4) Final fallback: specialized verification
+					bool specializedFallback = TryFallbackVerification(verifyStrategy.Policy, cancellationToken);
+					mUnit.IsApplied = specializedFallback;
+				}
+			}
+		}
+		else
+		{
+			cancellationToken?.ThrowIfCancellationRequested();
+
+			Dictionary<RegistryPolicyEntry, bool> verificationResults = CommonCore.RegistryManager.Manager.VerifyPoliciesInSystem(allPolicies);
+
+			// Update status based on verification results, with fallback support
+			foreach (MUnit mUnit in CollectionsMarshal.AsSpan(mUnits))
+			{
+				cancellationToken?.ThrowIfCancellationRequested();
+
+				if (mUnit.VerifyStrategy is IVerifyRegistry verifyStrategy)
+				{
+					RegistryPolicyEntry policy = verifyStrategy.Policy;
+
+					if (verificationResults.TryGetValue(policy, out bool isApplied) && isApplied)
+					{
+						mUnit.IsApplied = true;
+					}
+					else
+					{
+						// If primary verification is false, try fallback verification
+						bool fallbackResult = TryFallbackVerification(verifyStrategy.Policy, cancellationToken);
+						mUnit.IsApplied = fallbackResult;
+					}
+				}
+			}
 		}
 	}
 
@@ -1450,7 +1464,25 @@ internal sealed partial class MUnit(
 					MUnitOperation.Verify => Atlas.GetStr("SuccessfullyVerifiedSecurityMeasures"),
 					_ => Atlas.GetStr("SuccessfullyProcessedSecurityMeasures")
 				};
-				viewModel.MainInfoBar.WriteSuccess(string.Format(operationText2, mUnits.Count));
+				if (operation == MUnitOperation.Apply)
+				{
+					// The Apply operation sets the state of each measure from the system, so fewer
+					// measures can be in effect than the operation asked for.
+					int appliedCount = mUnits.Count(static mUnit => mUnit.IsApplied == true);
+
+					if (appliedCount < mUnits.Count)
+					{
+						viewModel.MainInfoBar.WriteWarning(string.Format(Atlas.GetStr("PartiallyAppliedSecurityMeasures"), appliedCount, mUnits.Count - appliedCount));
+					}
+					else
+					{
+						viewModel.MainInfoBar.WriteSuccess(string.Format(operationText2, appliedCount));
+					}
+				}
+				else
+				{
+					viewModel.MainInfoBar.WriteSuccess(string.Format(operationText2, mUnits.Count));
+				}
 			}
 			finally
 			{
