@@ -6758,6 +6758,10 @@ NOTA: Esta opción siempre se aplica si alguna directiva UMCI de App Control la 
 <data name="PolicyFileDoesNotExistNothingToRemove" xml:space="preserve">
   <value>El archivo de política no existe, nada que eliminar</value>
 </data>
+
+<data name="PolicyFileDoesNotExistCreatingNew" xml:space="preserve">
+  <value>El archivo de política no existe, se creará con las políticas solicitadas</value>
+</data>
 <data name="RemovedPolicyEntry" xml:space="preserve">
   <value>ELIMINADO: {0}</value>
 </data>

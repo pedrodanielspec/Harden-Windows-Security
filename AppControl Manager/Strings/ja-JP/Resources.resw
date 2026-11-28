@@ -6758,6 +6758,10 @@
 <data name="PolicyFileDoesNotExistNothingToRemove" xml:space="preserve">
   <value>ポリシーファイルが存在しないため、削除するものはありません</value>
 </data>
+
+<data name="PolicyFileDoesNotExistCreatingNew" xml:space="preserve">
+  <value>ポリシーファイルが存在しないため、要求されたポリシーで作成します</value>
+</data>
 <data name="RemovedPolicyEntry" xml:space="preserve">
   <value>削除済み：{0}</value>
 </data>

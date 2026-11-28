@@ -6758,6 +6758,10 @@ UWAGA: Ta opcja jest zawsze wymuszana, jeśli jakakolwiek zasada UMCI Kontroli A
 <data name="PolicyFileDoesNotExistNothingToRemove" xml:space="preserve">
   <value>Plik zasad nie istnieje, nic do usunięcia</value>
 </data>
+
+<data name="PolicyFileDoesNotExistCreatingNew" xml:space="preserve">
+  <value>Plik zasad nie istnieje, zostanie utworzony z żądanymi zasadami</value>
+</data>
 <data name="RemovedPolicyEntry" xml:space="preserve">
   <value>USUNIĘTO: {0}</value>
 </data>

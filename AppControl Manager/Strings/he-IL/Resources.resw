@@ -6758,6 +6758,10 @@
 <data name="PolicyFileDoesNotExistNothingToRemove" xml:space="preserve">
   <value>קובץ המדיניות אינו קיים, אין מה להסיר</value>
 </data>
+
+<data name="PolicyFileDoesNotExistCreatingNew" xml:space="preserve">
+  <value>קובץ המדיניות אינו קיים, הוא ייווצר עם המדיניות המבוקשת</value>
+</data>
 <data name="RemovedPolicyEntry" xml:space="preserve">
   <value>הוסר: {0}</value>
 </data>

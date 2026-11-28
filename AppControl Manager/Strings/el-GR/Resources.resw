@@ -6758,6 +6758,10 @@
 <data name="PolicyFileDoesNotExistNothingToRemove" xml:space="preserve">
   <value>Το αρχείο πολιτικής δεν υπάρχει, τίποτα προς κατάργηση</value>
 </data>
+
+<data name="PolicyFileDoesNotExistCreatingNew" xml:space="preserve">
+  <value>Το αρχείο πολιτικής δεν υπάρχει, δημιουργείται με τις ζητούμενες πολιτικές</value>
+</data>
 <data name="RemovedPolicyEntry" xml:space="preserve">
   <value>ΚΑΤΑΡΓΗΘΗΚΕ: {0}</value>
 </data>
