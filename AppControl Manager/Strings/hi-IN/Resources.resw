@@ -6758,6 +6758,10 @@ NOTE: यदि कोई भी App Control UMCI नीति इसे सक�
 <data name="PolicyFileDoesNotExistNothingToRemove" xml:space="preserve">
   <value>नीति फ़ाइल मौजूद नहीं है, हटाने के लिए कुछ भी नहीं है</value>
 </data>
+
+<data name="PolicyFileDoesNotExistCreatingNew" xml:space="preserve">
+  <value>नीति फ़ाइल मौजूद नहीं है, इसे अनुरोधित नीतियों के साथ बनाया जा रहा है</value>
+</data>
 <data name="RemovedPolicyEntry" xml:space="preserve">
   <value>हटाया गया: {0}</value>
 </data>

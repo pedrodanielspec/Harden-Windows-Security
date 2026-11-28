@@ -6758,6 +6758,10 @@
 <data name="PolicyFileDoesNotExistNothingToRemove" xml:space="preserve">
   <value>പോളിസി ഫയൽ നിലവിലില്ല, നീക്കം ചെയ്യാൻ ഒന്നുമില്ല</value>
 </data>
+
+<data name="PolicyFileDoesNotExistCreatingNew" xml:space="preserve">
+  <value>പോളിസി ഫയൽ നിലവിലില്ല, അഭ്യർത്ഥിച്ച പോളിസികളോടെ ഇത് സൃഷ്ടിക്കുന്നു</value>
+</data>
 <data name="RemovedPolicyEntry" xml:space="preserve">
   <value>നീക്കം ചെയ്തു: {0}</value>
 </data>

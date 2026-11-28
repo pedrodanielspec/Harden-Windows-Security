@@ -6758,6 +6758,10 @@
 <data name="PolicyFileDoesNotExistNothingToRemove" xml:space="preserve">
   <value>Le fichier de stratégie n'existe pas, rien à supprimer</value>
 </data>
+
+<data name="PolicyFileDoesNotExistCreatingNew" xml:space="preserve">
+  <value>Le fichier de stratégie n'existe pas, il sera créé avec les stratégies demandées</value>
+</data>
 <data name="RemovedPolicyEntry" xml:space="preserve">
   <value>SUPPRIMÉ : {0}</value>
 </data>

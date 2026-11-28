@@ -6758,6 +6758,10 @@ HINWEIS: Diese Option wird immer erzwungen, wenn eine beliebige App Control-UMCI
 <data name="PolicyFileDoesNotExistNothingToRemove" xml:space="preserve">
   <value>Richtliniendatei existiert nicht, nichts zu entfernen</value>
 </data>
+
+<data name="PolicyFileDoesNotExistCreatingNew" xml:space="preserve">
+  <value>Richtliniendatei existiert nicht, sie wird mit den angeforderten Richtlinien erstellt</value>
+</data>
 <data name="RemovedPolicyEntry" xml:space="preserve">
   <value>ENTFERNT: {0}</value>
 </data>

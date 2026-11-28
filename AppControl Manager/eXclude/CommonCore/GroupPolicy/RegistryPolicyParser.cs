@@ -453,9 +453,27 @@ internal static class RegistryPolicyParser
 
 				CSEMgr.RegisterCSEGuids();
 
-				// Read the current system policies
-				RegistryPolicyFile policyFile = ParseFile(PolicyContextFilePath);
-				Logger.Write(string.Format(Atlas.GetStr("LoadedExistingPolicyFileWithEntries"), policyFile.Entries.Count));
+				// The Group Policy client-side extension creates Registry.pol only after a local policy exists,
+				// so a machine with no local policy has none, and an apply must create it.
+				RegistryPolicyFile policyFile;
+
+				if (File.Exists(PolicyContextFilePath) && new FileInfo(PolicyContextFilePath).Length >= 8)
+				{
+					policyFile = ParseFile(PolicyContextFilePath);
+					Logger.Write(string.Format(Atlas.GetStr("LoadedExistingPolicyFileWithEntries"), policyFile.Entries.Count));
+				}
+				else
+				{
+					Logger.Write(Atlas.GetStr("PolicyFileDoesNotExistCreatingNew"));
+
+					policyFile = new(
+						signature: RegistryPolicyFile.REGISTRY_FILE_SIGNATURE,
+						version: RegistryPolicyFile.REGISTRY_FILE_VERSION,
+						entries: []
+					);
+
+					_ = Directory.CreateDirectory(Path.GetDirectoryName(PolicyContextFilePath)!);
+				}
 
 				// Dictionary to store entries with KeyName+ValueName as the key for uniqueness
 				Dictionary<string, RegistryPolicyEntry> mergedEntries = new(StringComparer.OrdinalIgnoreCase);

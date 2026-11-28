@@ -6758,6 +6758,10 @@ NOTE: This option is always enforced if any App Control UMCI policy enables it. 
 <data name="PolicyFileDoesNotExistNothingToRemove" xml:space="preserve">
   <value>Policy file does not exist, nothing to remove</value>
 </data>
+
+<data name="PolicyFileDoesNotExistCreatingNew" xml:space="preserve">
+  <value>Policy file does not exist, creating it with the requested policies</value>
+</data>
 <data name="RemovedPolicyEntry" xml:space="preserve">
   <value>REMOVED: {0}</value>
 </data>
